@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
+from contextlib import asynccontextmanager
 import time
 import logging
 from app.config import settings
@@ -15,22 +16,28 @@ from app.logging_config import setup_logging
 # Setup logging
 logger = setup_logging()
 
-# Initialize FastAPI app
-app = FastAPI(
-    title="Secure LLM Inference Service",
-    description="Fast and secure local LLM inference API with authentication and rate limiting",
-    version="1.0.0"
-)
 
-
-@app.on_event("startup")
-async def startup_event():
-    """Check Ollama service on startup"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    # Startup
     logger.info("Starting Secure LLM Inference Service...")
     if not ollama_service.health_check():
         logger.warning("Ollama service not available. Please ensure Ollama is running.")
     else:
         logger.info(f"Ollama service connected. Model: {settings.OLLAMA_MODEL}")
+    yield
+    # Shutdown (if needed)
+    logger.info("Shutting down Secure LLM Inference Service...")
+
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Secure LLM Inference Service",
+    description="Fast and secure local LLM inference API with authentication and rate limiting",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 
 @app.post("/auth/token", response_model=Token)
