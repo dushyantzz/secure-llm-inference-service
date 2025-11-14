@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config import settings
@@ -11,18 +12,30 @@ from app.models import User
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
+# Pre-computed bcrypt hash for "demo1234" to avoid hashing at import time
+# This hash was generated with: bcrypt.hashpw(b"demo1234", bcrypt.gensalt())
+DEMO_PASSWORD_HASH = "$2b$12$.bydyAHPO4q.n45Hx4sgW.CjNRx07fczTmev6lwbcLDZTxHEGalJ2"
+
 # Demo users database (in production, use a real database)
 fake_users_db = {
     "demo": {
         "username": "demo",
-        "hashed_password": pwd_context.hash("demo1234"),
+        "hashed_password": DEMO_PASSWORD_HASH,
         "disabled": False,
     }
 }
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify password with fallback to direct bcrypt if passlib fails"""
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        # Fallback to direct bcrypt verification if passlib has compatibility issues
+        try:
+            return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+        except Exception:
+            return False
 
 
 def get_password_hash(password: str) -> str:
